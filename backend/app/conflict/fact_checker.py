@@ -21,10 +21,10 @@ def _get_client() -> OpenAI:
 
 CONTRADICTION_PROMPT = """你是一个企业知识库审计专家。请比较以下两个文本片段，判断它们之间是否存在事实性矛盾。
 
-**文本 A:**
+**文本 A** (来源: {source_a}):
 {text_a}
 
-**文本 B:**
+**文本 B** (来源: {source_b}):
 {text_b}
 
 请分析：
@@ -47,19 +47,41 @@ CONTRADICTION_PROMPT = """你是一个企业知识库审计专家。请比较以
 }}"""
 
 
-async def check_contradiction(text_a: str, text_b: str) -> dict | None:
+async def check_contradiction(
+    text_a: str,
+    text_b: str,
+    meta_a: dict | None = None,
+    meta_b: dict | None = None,
+) -> dict | None:
     """Use DeepSeek to check if two text chunks contain factual contradictions.
 
     Args:
         text_a: Content of first chunk.
         text_b: Content of second chunk.
+        meta_a: Optional Chroma metadata for chunk A (filename, section_path).
+        meta_b: Optional Chroma metadata for chunk B.
 
     Returns:
         Dict with contradiction analysis, or None if the check fails.
     """
     client = _get_client()
 
+    # Build source labels for context
+    def _source_label(meta: dict | None) -> str:
+        if not meta:
+            return "未知来源"
+        filename = meta.get("filename", "未知文件")
+        section = meta.get("section_path", "")
+        if section:
+            return f"{filename} > {section}"
+        return filename
+
+    source_a = _source_label(meta_a)
+    source_b = _source_label(meta_b)
+
     prompt = CONTRADICTION_PROMPT.format(
+        source_a=source_a,
+        source_b=source_b,
         text_a=text_a[:1500],
         text_b=text_b[:1500],
     )

@@ -58,7 +58,12 @@ async def generate_answer(
     context_parts = []
     sources = []
     for i, chunk in enumerate(chunks, 1):
-        context_parts.append(f"[来源{i}] {chunk['content']}")
+        section_hint = ""
+        if chunk.get("section_path"):
+            section_hint = f" > {chunk['section_path']}"
+        context_parts.append(
+            f"[来源{i}]「{chunk.get('filename', '')}」{section_hint}\n{chunk['content']}"
+        )
         sources.append(SourceInfo(
             chunk_id=chunk.get("id", ""),
             document_id=chunk.get("document_id", ""),
@@ -117,7 +122,12 @@ async def generate_answer_stream(
     context_parts = []
     sources = []
     for i, chunk in enumerate(chunks, 1):
-        context_parts.append(f"[来源{i}] {chunk['content']}")
+        section_hint = ""
+        if chunk.get("section_path"):
+            section_hint = f" > {chunk['section_path']}"
+        context_parts.append(
+            f"[来源{i}]「{chunk.get('filename', '')}」{section_hint}\n{chunk['content']}"
+        )
         sources.append(SourceInfo(
             chunk_id=chunk.get("id", ""),
             document_id=chunk.get("document_id", ""),

@@ -46,14 +46,21 @@ class Settings(BaseSettings):
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_HOST: str = "http://localhost:3000"
 
-    # Ingestion
-    CHUNK_SIZE: int = 512
-    CHUNK_OVERLAP: int = 50
+    # Ingestion — chunking (new token-based settings)
+    CHUNK_TARGET_TOKENS: int = 512       # Target tokens per chunk
+    CHUNK_OVERLAP_TOKENS: int = 50       # Overlap in tokens
+    CHUNK_SEMANTIC_THRESHOLD: float = 0.7  # Cosine similarity threshold for topic-switch detection
+    CHUNK_USE_SEMANTIC: bool = True      # Enable semantic boundary detection
     MAX_FILE_SIZE_MB: int = 20
+
+    # Deprecated — kept for backward compatibility
+    CHUNK_SIZE: int = 512                # @deprecated: use CHUNK_TARGET_TOKENS
+    CHUNK_OVERLAP: int = 50              # @deprecated: use CHUNK_OVERLAP_TOKENS
 
     # Conflict Detection
     SIMILARITY_THRESHOLD: float = 0.85
     RERANKER_THRESHOLD: float = 0.3
+    SAME_SECTION_SIMILARITY_BONUS: float = -0.05  # Reduce threshold for same-section pairs (more likely related)
 
     @property
     def db_path(self) -> str:

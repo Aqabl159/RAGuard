@@ -40,14 +40,39 @@ def get_connection() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Run schema migration on startup."""
+    """Run schema migration on startup.
+
+    Creates tables if not exist, then applies incremental migrations
+    for new columns added after initial schema.
+    """
     conn = get_connection()
     try:
         schema = _load_schema()
         conn.executescript(schema)
         conn.commit()
+
+        # Incremental migrations for V2 chunk metadata
+        _migrate_v2_chunk_metadata(conn)
     finally:
         conn.close()
+
+
+def _migrate_v2_chunk_metadata(conn: sqlite3.Connection) -> None:
+    """Add V2 chunk metadata columns if they don't exist (idempotent)."""
+    migrations = [
+        "ALTER TABLE chunks ADD COLUMN section_path TEXT DEFAULT ''",
+        "ALTER TABLE chunks ADD COLUMN heading_level INTEGER DEFAULT 0",
+        "ALTER TABLE chunks ADD COLUMN prev_chunk_id TEXT DEFAULT NULL",
+        "ALTER TABLE chunks ADD COLUMN next_chunk_id TEXT DEFAULT NULL",
+    ]
+    # SQLite only reports the first missing column via error; we try each.
+    for sql in migrations:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists — skip
+            pass
 
 
 # Application-wide connection pool (single connection for SQLite is fine for MVP)

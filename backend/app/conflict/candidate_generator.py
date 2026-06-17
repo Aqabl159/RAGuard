@@ -1,4 +1,8 @@
-"""Candidate pair generation via Chroma full scan + cosine similarity."""
+"""Candidate pair generation via Chroma full scan + cosine similarity.
+
+V2: Same-section chunk pairs get a slight similarity threshold reduction,
+since chunks within the same section are more likely to be related (not contradictory).
+"""
 
 import numpy as np
 from app.database.chroma_client import get_collection
@@ -84,9 +88,21 @@ def generate_candidate_pairs(
         row[i] = -1.0
         top_indices = np.argsort(row)[::-1][:top_k_per_chunk]
 
+        meta_a = metadatas[i] if metadatas else {}
+        section_a = meta_a.get("section_path", "")
+
         for j in top_indices:
             similarity = float(row[j])
-            if similarity < threshold:
+
+            # V2: Same-section chunk pairs get a threshold bonus
+            # (lower bar — they're more likely to be related, not contradictory)
+            meta_b = metadatas[j] if metadatas else {}
+            section_b = meta_b.get("section_path", "")
+            adjusted_threshold = threshold
+            if section_a and section_b and section_a == section_b:
+                adjusted_threshold += settings.SAME_SECTION_SIMILARITY_BONUS
+
+            if similarity < adjusted_threshold:
                 continue
 
             # Canonical ordering to avoid duplicates
@@ -100,8 +116,8 @@ def generate_candidate_pairs(
                 "id_b": ids[j],
                 "content_a": documents[i] if i < len(documents) else "",
                 "content_b": documents[j] if j < len(documents) else "",
-                "meta_a": metadatas[i] if metadatas else {},
-                "meta_b": metadatas[j] if metadatas else {},
+                "meta_a": meta_a,
+                "meta_b": meta_b,
                 "similarity": similarity,
             })
 

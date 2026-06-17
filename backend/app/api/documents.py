@@ -232,3 +232,132 @@ async def list_chunks(
 
     items = [ChunkResponse(**dict(r)) for r in rows]
     return ChunkListResponse(items=items, total=total, page=page, pages=pages)
+
+
+# ────────────────────────────────────────────
+# V2: Reindex endpoints (after chunker upgrade)
+# ────────────────────────────────────────────
+
+@router.post("/{doc_id}/reindex", status_code=202)
+async def reindex_document(doc_id: str):
+    """Reindex a single document using the V2 chunker.
+
+    Soft-deletes old chunks, clears Chroma vectors, and re-runs
+    the full ingestion pipeline. Marks related conflicts as stale.
+    """
+    db = get_db()
+
+    doc = db.execute("SELECT * FROM documents WHERE id = ? AND status != 'deleted'", (doc_id,)).fetchone()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc["status"] == "processing":
+        raise HTTPException(status_code=409, detail="Document is currently being processed")
+
+    now = datetime.utcnow().isoformat()
+
+    # 1. Soft-delete old chunks
+    db.execute("UPDATE chunks SET is_active = FALSE WHERE document_id = ?", (doc_id,))
+
+    # 2. Delete Chroma vectors
+    try:
+        from app.database.chroma_client import get_collection
+        collection = get_collection()
+        chroma_rows = db.execute(
+            "SELECT chroma_id FROM chunks WHERE document_id = ?", (doc_id,)
+        ).fetchall()
+        chroma_ids = [r["chroma_id"] for r in chroma_rows if r["chroma_id"]]
+        if chroma_ids:
+            collection.delete(ids=chroma_ids)
+    except Exception:
+        pass
+
+    # 3. Mark related conflicts as stale
+    db.execute(
+        """UPDATE conflicts SET status = 'dismissed', resolved_at = ?
+           WHERE id IN (
+               SELECT DISTINCT cc.conflict_id
+               FROM conflict_chunks cc
+               JOIN chunks c ON cc.chunk_id = c.id
+               WHERE c.document_id = ?
+           ) AND status IN ('open', 'in_review')""",
+        (now, doc_id),
+    )
+    db.commit()
+
+    # 4. Reset document status and re-process
+    db.execute(
+        "UPDATE documents SET status = 'pending', updated_at = ? WHERE id = ?",
+        (now, doc_id),
+    )
+    db.commit()
+
+    asyncio.create_task(process_document(doc_id))
+
+    return {"status": "accepted", "document_id": doc_id, "message": "Reindexing started"}
+
+
+@router.post("/reindex-all", status_code=202)
+async def reindex_all_documents():
+    """Reindex all documents with 'indexed' status using the V2 chunker.
+
+    Processes documents sequentially to avoid overwhelming the embedding API.
+    """
+    db = get_db()
+
+    rows = db.execute(
+        "SELECT id, filename FROM documents WHERE status = 'indexed' ORDER BY created_at"
+    ).fetchall()
+
+    if not rows:
+        return {"status": "ok", "message": "No indexed documents to reindex", "count": 0}
+
+    doc_list = [{"id": r["id"], "filename": r["filename"]} for r in rows]
+
+    # Kick off background processing
+    async def _reindex_all():
+        for doc in doc_list:
+            try:
+                # Soft-delete old chunks
+                db.execute("UPDATE chunks SET is_active = FALSE WHERE document_id = ?", (doc["id"],))
+                # Clear Chroma
+                try:
+                    from app.database.chroma_client import get_collection
+                    collection = get_collection()
+                    chroma_rows = db.execute(
+                        "SELECT chroma_id FROM chunks WHERE document_id = ?", (doc["id"],)
+                    ).fetchall()
+                    chroma_ids = [r["chroma_id"] for r in chroma_rows if r["chroma_id"]]
+                    if chroma_ids:
+                        collection.delete(ids=chroma_ids)
+                except Exception:
+                    pass
+                # Mark conflicts stale
+                now = datetime.utcnow().isoformat()
+                db.execute(
+                    """UPDATE conflicts SET status = 'dismissed', resolved_at = ?
+                       WHERE id IN (
+                           SELECT DISTINCT cc.conflict_id
+                           FROM conflict_chunks cc
+                           JOIN chunks c ON cc.chunk_id = c.id
+                           WHERE c.document_id = ?
+                       ) AND status IN ('open', 'in_review')""",
+                    (now, doc["id"]),
+                )
+                db.execute(
+                    "UPDATE documents SET status = 'pending', updated_at = ? WHERE id = ?",
+                    (now, doc["id"]),
+                )
+                db.commit()
+                print(f"[Reindex] Starting reindex for {doc['filename']} ({doc['id']})")
+                await process_document(doc["id"])
+            except Exception as e:
+                print(f"[Reindex] Failed for {doc['filename']}: {e}")
+
+    asyncio.create_task(_reindex_all())
+
+    return {
+        "status": "accepted",
+        "message": f"Reindexing {len(doc_list)} documents",
+        "count": len(doc_list),
+        "documents": doc_list,
+    }

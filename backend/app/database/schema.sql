@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS chunks (
     page_number     INTEGER,
     token_count     INTEGER,
     is_active       BOOLEAN DEFAULT TRUE,
+    -- V2: structured chunk metadata
+    section_path    TEXT DEFAULT '',
+    heading_level   INTEGER DEFAULT 0,
+    prev_chunk_id   TEXT DEFAULT NULL,
+    next_chunk_id   TEXT DEFAULT NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

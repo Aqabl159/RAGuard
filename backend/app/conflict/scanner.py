@@ -65,7 +65,12 @@ async def run_scan(scan_job_id: str, threshold: float = 0.85) -> int:
 
         async def check_one(pair: dict):
             async with sem:
-                result = await check_contradiction(pair["content_a"], pair["content_b"])
+                result = await check_contradiction(
+                    pair["content_a"],
+                    pair["content_b"],
+                    meta_a=pair.get("meta_a"),
+                    meta_b=pair.get("meta_b"),
+                )
                 if result:
                     raw_contradictions.append({"pair": pair, "result": result})
 

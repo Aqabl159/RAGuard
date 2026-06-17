@@ -49,6 +49,9 @@ async def retrieve_chunks(query: str, top_k: int = 10) -> list[dict]:
                 "score": score,
                 "document_id": metadata.get("document_id", ""),
                 "filename": metadata.get("filename", ""),
+                # V2 structured metadata
+                "section_path": metadata.get("section_path", ""),
+                "heading_level": metadata.get("heading_level", 0),
             })
 
     return chunks
