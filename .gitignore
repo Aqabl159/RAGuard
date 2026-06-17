@@ -1,0 +1,76 @@
+# ===== Environment =====
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
+*.whl
+
+# ===== Testing & Coverage =====
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# ===== SQLite & Databases =====
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+
+# ===== Chroma Vector Store =====
+**/chroma_db/
+.chroma/
+
+# ===== Uploaded Files =====
+**/data/uploads/
+**/data/uploads/*
+
+# ===== IDE / Editor =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vscode-test/
+
+# ===== Node / Frontend =====
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# ===== Docker =====
+# (keep Dockerfile, docker-compose.yml, .dockerignore)
+
+# ===== Claude Code =====
+.claude/
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===== Misc =====
+*.log
+*.tmp
+*.bak
+*.orig
